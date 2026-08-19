@@ -117,6 +117,7 @@ class BasicRtlSimulatorWithSignalRegisterMethods(BasicRtlSimulator):
             simModule = ModuleType('simModule_' + unique_name)
             # python supports only ~100 opened brackets; MemoryError: s_push: parser stack overflow
             # python supports only ~100 levels of indentation; IndentationError: too many levels of indentation
+            # :see: cpython _PyAST_Optimize, Py_C_RECURSION_LIMIT
             exec(buff.getvalue(),
                  simModule.__dict__)
 
