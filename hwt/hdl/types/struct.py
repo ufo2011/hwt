@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Self, dataclass_transform, overload, Callable, TypeVar
 
 from hwt.doc_markers import internal
 from hwt.hdl.const import HConst
@@ -84,6 +84,8 @@ _protectedNames = {
     # "_sig", "_sigInside", "_isAccessible",
     # *dir(HwIOSignal),
 }
+
+DataClsT = TypeVar("DataClsT")
 
 
 class HStruct(HdlType):
@@ -187,6 +189,59 @@ class HStruct(HdlType):
 
         self._constCls = HStructConst
         self._rtlSignalCls = HStructRtlSignal
+
+    """
+    :note: usage:
+    .. code-block::
+        @HStruct.fromClass
+        class Struct1():
+            __: HBits(8)
+            f1: HBits(16)
+            f0: HBits(8)
+        
+        
+        @HStruct.fromClass(ignoredPaddingName="_pad")
+        class Struct2():
+            _pad: HBits(8)
+            f1: HBits(16)
+            f0: HBits(8)
+
+    
+    """
+    # :note: fromClass always returns just HStruct, the typing specifies DataClsT just for IDE compatibility
+    @dataclass_transform()
+    @overload
+    @classmethod
+    def fromClass(cls, c: type[DataClsT], /) -> DataClsT | Self: ...
+
+    @dataclass_transform()
+    @overload
+    @classmethod
+    def fromClass(cls, *, ignoredPaddingName: str="__"
+    ) -> Callable[[type[DataClsT]], DataClsT | Self]: ...
+
+    @dataclass_transform()
+    @classmethod
+    def fromClass(cls,
+        c: type[DataClsT] | None=None, / , *, ignoredPaddingName: str="__"
+    ) -> DataClsT | Callable[[type[DataClsT]], DataClsT | Self] | Self:
+
+        def _make_hstruct(c_inner: type[DataClsT]) -> DataClsT:
+            fields: list[tuple[HdlType, str | None]] = []
+            # :note: field order is guaranteed  https://docs.python.org/3.14/library/dataclasses.html#dataclasses.dataclass 
+            for name, typ in c_inner.__annotations__.items():
+                assert isinstance(typ, HdlType), typ
+                if name == ignoredPaddingName:
+                    name = None
+                fields.append((typ, name))  # type: ignore[arg-type]
+
+            hstruct_obj = HStruct(*fields, name=c_inner.__name__)
+            return hstruct_obj  # type: ignore[return-value]
+
+        if c is not None:
+            return _make_hstruct(c)
+
+        return _make_hstruct
 
     def bit_length(self) -> int:
         bl = self.__bit_length_val
