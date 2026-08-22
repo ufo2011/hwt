@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Self, TypeVar, Type
 
 from hwt.doc_markers import internal
 from hwt.hdl.const import HConst
@@ -150,7 +150,7 @@ class HStruct(HdlType):
             except TypeError:
                 field = f
             if not isinstance(field, HStructField):
-                raise TypeError(f"Template for struct field {f} is"
+                raise TypeError(f"Template for struct field ", f, " is"
                                 " not in valid format")
 
             fields.append(field)
@@ -305,6 +305,90 @@ class HStruct(HdlType):
 
         buff.append(f"{myIndent:s}}}")
         return "\n".join(buff)
+
+
+T = TypeVar("T", bound="HStructFromClass")
+
+
+class HStructFromClass:
+    """
+    Base class for struct definitions via class annotations.
+
+    Usage:
+    .. code-block::
+        class Struct0(HStructFromClass):
+            f0: HBits(8)
+            f1: HBits(16)
+
+        class Struct3(Struct0):
+            __: HBits(8) # nameless padding
+            f2: HBits(32)
+        
+        Struct3.asHdlType() == HStruct(
+            (HBits(8), "f0"),
+            (HBits(16), "f1"),
+            (HBits(8), None),
+            (HBits(32), "f2"),
+        )
+        
+    """
+
+    IGNORED_PADDING_NAME = "__"
+    __hStructObj = None
+    
+    @classmethod
+    def from_py(cls, *args, **kwargs):
+        return cls.asHdlType().from_py(*args, **kwargs)
+
+    @classmethod
+    def asHdlType(cls: type[T]) -> "HStruct":
+        hStruct = cls.__dict__.get("_HStructFromClass__hStructObj")  # check that the definition is exactly on this class
+        if hStruct is not None:
+            return hStruct
+
+        fields = []
+        cls._collectHStructFields(fields, {})
+        hStruct = HStruct(*fields, name=cls.__name__)
+        cls.__hStructObj = hStruct
+        return hStruct
+
+    @classmethod
+    def _collectHStructFields(cls, fields: list[tuple[HdlType, str | None]], seenNames: dict[str, Type[Self]]):
+        # :note: __mro__ example for Struct0: (Struct0, HStructFromClass, object)
+        for base in reversed(cls.__mro__):
+            if base is cls or base is object or base is HStructFromClass:
+                # skip root pure pyhonic base classes 
+                continue
+
+            if not issubclass(base, HStructFromClass):
+                continue
+
+            t = base.asHdlType()
+            fields.extend(t.fields)
+            for f in t.fields:
+                if f.name is None:
+                    continue
+                seenOn = seenNames.get(f.name, None)
+                if seenOn is not None:
+                    raise AssertionError("The field name is ambiguous", f.name, seenOn, base)
+                seenNames[f.name] = base
+
+        annotations = getattr(cls, "__annotations__", None)
+        for field_name, typ in annotations.items():
+            if isinstance(typ, type) and issubclass(typ, HStructFromClass):
+                typ = typ.asHdlType()
+
+            assert isinstance(typ, HdlType), typ
+
+            h_name = None if field_name == cls.IGNORED_PADDING_NAME else field_name
+            fields.append((typ, h_name))
+            if h_name is not None:
+                seenOn = seenNames.get(h_name, None)
+                if seenOn is not None:
+                    raise AssertionError("The field name is ambiguous", h_name, seenOn, cls)
+                seenNames[h_name] = cls
+
+        return fields
 
 
 def offsetof(structTy: HStruct, field: HStructField):
