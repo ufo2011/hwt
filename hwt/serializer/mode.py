@@ -14,13 +14,13 @@ use serialize* methods to specify serialization mode for unit class
 """
 
 from collections import namedtuple
-from typing import Type
+from typing import Type, Any
 
 from hwt.doc_markers import internal
 
 
 @internal
-def freeze_dict(data):
+def freeze_dict(data: dict[str, Any]) -> tuple[Any]:
     keys = sorted(data.keys())
     if keys:
         frozen_type = namedtuple(''.join(keys), keys)
@@ -30,9 +30,9 @@ def freeze_dict(data):
 
 
 @internal
-def hwParamsToValTuple(module: "HwModule"):
+def hwParamsToValTuple(module: "HwModule") -> tuple[Any]:
     # [TODO] check sub params
-    d = {}
+    d: dict[str, Any] = {}
     for p in module._hwParams:
         v = p.get_value()
         d[p._name] = v
