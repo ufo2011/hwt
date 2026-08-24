@@ -214,7 +214,7 @@ def In(sigOrConst: Union[RtlSignalBase, HwIOBase, HConst], iterable: Sequence[Un
     """
     res = None
     for i in iterable:
-        i = toHVal(i)
+        i = toHVal(i, suggestedType=sigOrConst._dtype)
         if res is None:
             res = sigOrConst._eq(i)
         else:
