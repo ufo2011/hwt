@@ -111,7 +111,7 @@ def HTypeFromHwIOObjMapItem(hwIOMapItem: HwIOMapItem):
     f = HStructField(dtype, nameOrPrefix)
 
     if not isTerminal:
-        f.meta = HStructFieldMeta(split=True)
+        f.meta = HStructFieldMeta(splitMembers=True)
 
     return f
 

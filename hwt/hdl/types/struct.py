@@ -15,22 +15,23 @@ class HStructFieldMeta():
     """
     Metadata for a field in :class:`HStruct` type
 
-    :ivar ~.split: flag which specifies if structured data type of this field
+    :ivar ~.splitMembers: flag which specifies if structured data type of this field
         should be synchronized as a one interface
-        or each it's part should be synchronized separately
+        or each of it's members should be synchronized separately
     """
 
-    def __init__(self, split=False):
-        self.split = split
+    def __init__(self, splitMembers=False):
+        self.splitMembers = splitMembers
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if other is None:
             return False
-        return self.split == other.split
+
+        return self.splitMembers == other.splitMembers
 
     @internal
     def __hash__(self):
-        return hash(self.split)
+        return hash(self.splitMembers)
 
 
 class HStructField(object):
