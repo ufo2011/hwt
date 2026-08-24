@@ -1,13 +1,14 @@
-from typing import Self, TypeVar, Type
+from typing import Self, TypeVar, Type, Optional
 
 from hwt.doc_markers import internal
 from hwt.hdl.const import HConst
 from hwt.hdl.types.hdlType import HdlType
-from hwt.hdl.types.structValBase import HStructConstBase, HStructRtlSignalBase
+from hwt.hdl.types.structValBase import HStructConstBase, HStructRtlSignalBase, HStructCompatiblePyValT
 from hwt.hwIO import HwIO
 from hwt.pyUtils.typingFuture import override
 from hwt.serializer.generic.indent import getIndent
 from hwt.synthesizer.rtlLevel.rtlSignal import RtlSignal
+from hwt.mainBases import RtlSignalBase
 
 
 class HStructFieldMeta():
@@ -57,7 +58,7 @@ class HStructField(object):
         if name is None:
             name = "<padding>"
 
-        return f"<HStructField {self.dtype}, {name:s}>"
+        return f"<HStrructField {self.dtype}, {name:s}>"
 
 
 _protectedNames = {
@@ -320,25 +321,85 @@ class HStructFromClass:
             f0: HBits(8)
             f1: HBits(16)
 
-        class Struct3(Struct0):
+        class Struct1(Struct0):
             __: HBits(8) # nameless padding
             f2: HBits(32)
         
-        Struct3.asHdlType() == HStruct(
+        Struct1.asHdlType() == HStruct(
             (HBits(8), "f0"),
             (HBits(16), "f1"),
             (HBits(8), None),
             (HBits(32), "f2"),
         )
         
+        class Struct2(HStructFromClass):
+            f0: HBits(8) = 0 # default values are supported
+        
+        print(Struct2.from_py(None))
+        {
+           f0: <HBitsConst b8 0>
+        }
+        # default values can be discarded using vld_mask=0 
+        # the values in constructor works as a dict update
+        # specifies values override the defaults 
+        print(Struct2.from_py(None, vld_mask=0))
+        {
+           f0: <HBitsConst b8 0, mask 0>
+        }
     """
 
     IGNORED_PADDING_NAME = "__"
     __hStructObj = None
+    __hStructObjOrig_from_py = None
     
     @classmethod
-    def from_py(cls, *args, **kwargs):
-        return cls.asHdlType().from_py(*args, **kwargs)
+    def from_py(cls, val: HStructCompatiblePyValT, vld_mask:Optional[int]=None):
+        return cls.asHdlType().from_py(val, vld_mask=vld_mask)
+    
+    @classmethod
+    def _from_py_withInitFromClsDefValues(cls, val: HStructCompatiblePyValT, vld_mask:Optional[int]=None):
+        if vld_mask == 0:
+            val = None
+        else:
+            valUpdated = []
+            # apply defeault values
+            t = cls.__hStructObj
+            if isinstance(val, dict):
+                for f in t.fields:
+                    if f.name is None:
+                        continue
+                    
+                    if val is None:
+                        v = None
+                    else:
+                        v = val.get(f.name, None)
+                    
+                    if v is None:
+                        v = getattr(cls, f.name, None)
+        
+                    if not isinstance(v, (HConst, HwIO, RtlSignalBase)):
+                        v = f.dtype.from_py(v)
+                    valUpdated.append(v)
+            else:
+                if val is None:
+                    val = (None for _ in range(len(t.fields)))
+
+                valIt = iter(val)
+                for f in t.fields:
+                    if f.name is None:
+                        continue
+                    if val is None:
+                        v = None
+                    else:
+                        v = next(valIt)
+        
+                    if v is None:
+                        v = getattr(cls, f.name, None)
+                        
+                    if not isinstance(v, (HConst, RtlSignalBase)):
+                        v = f.dtype.from_py(v)
+                    valUpdated.append(v)
+        return cls.__hStructObjOrig_from_py(valUpdated, vld_mask=vld_mask)
 
     @classmethod
     def asHdlType(cls: type[T]) -> "HStruct":
@@ -349,6 +410,8 @@ class HStructFromClass:
         fields = []
         cls._collectHStructFields(fields, {})
         hStruct = HStruct(*fields, name=cls.__name__)
+        cls.__hStructObjOrig_from_py = hStruct.from_py
+        hStruct.from_py = cls._from_py_withInitFromClsDefValues
         cls.__hStructObj = hStruct
         return hStruct
 

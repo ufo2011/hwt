@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, Any, Sequence
 
 from hwt.hdl.const import HConst
 from hwt.hdl.operator import HOperatorNode
@@ -56,6 +56,11 @@ class HStructRtlSignalBase(RtlSignal):
         return HStructConstBase.__repr__(self, indent=indent)
 
 
+HStructCompatiblePyValT = Union[None,
+                                dict[str, Any],
+                                Sequence[Any]]
+
+
 class HStructConstBase(HConst):
     """
     Base class for values for structure types.
@@ -63,7 +68,7 @@ class HStructConstBase(HConst):
     """
     __slots__ = []
 
-    def __init__(self, typeObj: "HStruct", val: Optional[Union[dict, tuple]], skipCheck=False):
+    def __init__(self, typeObj: "HStruct", val: HStructCompatiblePyValT, skipCheck=False):
         """
         :param val: None or dict {field name: field value}
         :param typeObj: instance of HString HdlType
@@ -77,7 +82,9 @@ class HStructConstBase(HConst):
                      set(val.keys()).difference(set(self.__slots__)))
             else:
                 if hasattr(val, '__len__'):
-                    assert len(val) == len(self.__slots__), ("struct value has different number of values than initialization value", len(val), len(self.__slots__))
+                    assert len(val) == len(self.__slots__), (
+                        "struct value has different number of values than initialization value",
+                        len(val), len(self.__slots__))
                 else:
                     raise AssertionError("struct value initialization expects sequence got:", val, " T:", typeObj)
                     
@@ -138,7 +145,7 @@ class HStructConstBase(HConst):
 
     @override
     @classmethod
-    def from_py(cls, typeObj, val, vld_mask=None):
+    def from_py(cls, typeObj: "HStruct", val:HStructCompatiblePyValT, vld_mask:Optional[int]=None):
         """
         :param val: None or dict {field name: field value}
         :param typeObj: instance of HString HdlType
